@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-array-lib = {git = "ssh://git@github.com/wyatt-A/array-lib"}
+array-lib = {git = "ssh://git@github.com/wyatt-A/array-lib", features = ["io-nifti"]}
+ndarray = "0.16.1"
+ndarray-linalg = { version = "0.17.0", features = ["netlib-static"] }
+
 rayon = "1.10.0"
 
 [dev-dependencies]
