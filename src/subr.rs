@@ -1,7 +1,74 @@
 use ndarray::ShapeBuilder;
 use ndarray_linalg::EigVals;
 
-pub fn calc_mcc(glcm:&[f64], scratch_matrix:&mut [f64], n_bins:usize, px:&[f64], py:&[f64]) -> f64 {
+#[inline]
+pub fn calc_sum_of_squares(glcm:&[f64],n_bins:usize,ux:f64) -> f64 {
+    let mut s = 0.;
+    for i in 0..n_bins {
+        for j in 0..n_bins {
+            s += glcm[j*n_bins + i] * ((i + 1) as f64 - ux).powi(2)
+        }
+    }
+    s
+}
+
+#[inline]
+pub fn calc_sum_entropy(pxpy:&[f64],eps:f64) -> f64 {
+    - pxpy.iter().filter(|x| **x > 0.).map(|&pxpy| {
+        pxpy * (pxpy + eps).log2()
+    }).sum::<f64>()
+}
+
+#[inline]
+pub fn calc_sum_average(pxpy:&[f64],k_vals_sum:&[f64]) -> f64 {
+    debug_assert_eq!(k_vals_sum.len(),pxpy.len());
+    k_vals_sum.iter().zip(pxpy.iter()).map(|(&k,&pxpy)| {
+        k * pxpy
+    }).sum()
+}
+
+#[inline]
+pub fn calc_max_prob(glcm:&[f64]) -> f64 {
+    *glcm.iter().max_by(|a,b| a.partial_cmp(b)
+        .expect("number must be finite"))
+        .unwrap_or(&0.)
+}
+
+#[inline]
+pub fn calc_inverse_var(pxmy:&[f64],k_vals_diff:&[f64]) -> f64 {
+    debug_assert_eq!(k_vals_diff.len(),pxmy.len());
+    k_vals_diff.iter().zip(pxmy.iter()).filter(|(k,_)|**k > 0.).map(|(&k,&pxmy)| {
+        pxmy / k.powi(2)
+    }).sum()
+}
+
+#[inline]
+pub fn calc_idn(pxmy:&[f64],k_vals_diff:&[f64],n_bins:usize) -> f64 {
+    debug_assert_eq!(k_vals_diff.len(),pxmy.len());
+    k_vals_diff.iter().zip(pxmy.iter()).map(|(&k,&pxmy)| {
+        pxmy / (1. + (k/n_bins as f64))
+    }).sum()
+}
+
+#[inline]
+pub fn calc_id(pxmy:&[f64],k_vals_diff:&[f64]) -> f64 {
+    debug_assert_eq!(k_vals_diff.len(),pxmy.len());
+    k_vals_diff.iter().zip(pxmy.iter()).map(|(&k,&pxmy)| {
+        pxmy / (1. + k)
+    }).sum()
+}
+
+#[inline]
+pub fn calc_idmn(pxmy:&[f64],k_vals_diff:&[f64],n_bins:usize) -> f64 {
+    debug_assert_eq!(k_vals_diff.len(),pxmy.len());
+    k_vals_diff.iter().zip(pxmy.iter()).map(|(&k,&pxmy)| {
+        pxmy / (1. + (k.powi(2)/(n_bins.pow(2) as f64)))
+    }).sum()
+}
+
+
+#[inline]
+pub fn calc_mcc(glcm:&[f64], scratch_matrix:&mut [f64], n_bins:usize, px:&[f64], py:&[f64], eps:f64) -> f64 {
     assert_eq!(glcm.len(), scratch_matrix.len());
     assert_eq!(glcm.len(), n_bins*n_bins);
     scratch_matrix.fill(0.0);
@@ -11,7 +78,7 @@ pub fn calc_mcc(glcm:&[f64], scratch_matrix:&mut [f64], n_bins:usize, px:&[f64],
         for j in 0..n_bins {
             let mut s = 0.;
             for k in 0..n_bins {
-                s += glcm[k*n_bins + i] * glcm[k*n_bins + j] / (px[i]*py[k]);
+                s += glcm[k*n_bins + i] * glcm[k*n_bins + j] / (px[i]*py[k] + eps);
             }
             scratch_matrix[j*n_bins + i] = s;
         }
@@ -19,12 +86,13 @@ pub fn calc_mcc(glcm:&[f64], scratch_matrix:&mut [f64], n_bins:usize, px:&[f64],
 
     // calculate the sqrt of the second-largest eigenvalue
     let m = ndarray::ArrayView2::from_shape((n_bins,n_bins).f(),&scratch_matrix).unwrap();
-    if let Ok(e) = m.eigvals() {
-        let mut e = e.to_vec();
+    let mut e = m.eigvals().unwrap().to_vec();
+
+    if e.len() < 2 {
+        1.
+    }else {
         e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
         e[n_bins - 2].re.sqrt()
-    }else {
-        1.
     }
 
 }
@@ -40,23 +108,103 @@ pub fn calc_idm(pxmy:&[f64],k_vals_diff:&[f64]) -> f64 {
     }).sum()
 }
 
+// #[inline]
+// pub fn calc_imc(glcm:&[f64],n_bins:usize,px:&[f64],py:&[f64],eps:f64) -> [f64;2] {
+//
+//     let hx = joint_entropy(px,eps);
+//     let hy = joint_entropy(py,eps);
+//     let hxy = joint_entropy(glcm,eps);
+//
+//     let hxy1 = calc_hxy1(glcm,n_bins,px,py,eps);
+//     let hxy2 = calc_hxy2(n_bins,px,py,eps);
+//
+//     let imc1 = (hxy - hxy1) / hx.max(hy);
+//     let a = 1. - (- 2. * (hxy2 - hxy)).exp();
+//     let imc2 = if a < 0. {
+//         0.
+//     }else {
+//         a.sqrt()
+//     };
+//     [imc1,imc2]
+// }
+
+pub fn calc_imc1(
+    glcm: &[f64],
+    n_bins: usize,
+    px: &[f64],
+    py: &[f64],
+    hxy: f64,
+    eps: f64,
+) -> f64 {
+
+    debug_assert_eq!(py.len(), n_bins);
+    debug_assert_eq!(glcm.len(), n_bins * n_bins);
+
+    // HX = -Σ px * log2(px + eps)
+    let mut hx = 0.0;
+    for &p in px {
+        hx -= p * (p + eps).log2();
+    }
+
+    // HY = -Σ py * log2(py + eps)
+    let mut hy = 0.0;
+    for &p in py {
+        hy -= p * (p + eps).log2();
+    }
+
+    // HXY1 = -Σ_ij p(i,j) * log2(px(i) * py(j) + eps)
+    let mut hxy1 = 0.0;
+    for i in 0..n_bins {
+        let px_i = px[i];
+        for j in 0..n_bins {
+            let py_j = py[j];
+            let pij = glcm[j * n_bins + i]; // column-major
+            hxy1 -= pij * (px_i * py_j + eps).log2();
+        }
+    }
+
+    let num = hxy - hxy1;          // Note: this is -(mutual information)
+    let denom = hx.max(hy);
+
+    if denom == 0.0 {
+        0.0                         // flat region convention
+    } else {
+        num / denom
+    }
+}
+
 #[inline]
-pub fn calc_imc(glcm:&[f64],n_bins:usize,px:&[f64],py:&[f64],eps:f64) -> [f64;2] {
+pub fn calc_imc2(
+    px: &[f64],
+    py: &[f64],
+    hxy: f64,
+    eps: f64,
+) -> f64 {
+    let n_bins = px.len();
+    assert_eq!(py.len(), n_bins);
 
-    let hx = joint_entropy(px,eps);
-    let hy = joint_entropy(py,eps);
-    let hxy = joint_entropy(glcm,eps);
-    let hxy1 = calc_hxy1(glcm,n_bins,px,py,eps);
-    let hxy2 = calc_hxy2(n_bins,px,py,eps);
+    // HXY2 = -Σ_i Σ_j  (px_i * py_j) * log₂(px_i * py_j + eps)
+    let mut hxy2 = 0.0;
+    for &px_i in px {
+        for &py_j in py {
+            let prod = px_i * py_j;
+            hxy2 -= prod * (prod + eps).log2();
+        }
+    }
 
-    let imc1 = (hxy - hxy1) / hx.max(hy);
-    let a = 1. - (- 2. * (hxy2 - hxy)).exp();
-    let imc2 = if a < 0. {
-        0.
-    }else {
-        a.sqrt()
-    };
-    [imc1,imc2]
+    // Numerical guard: if HXY ≥ HXY2 (shouldn’t happen, but may due to rounding),
+    // PyRadiomics returns 0.
+    if hxy >= hxy2 {
+        return 0.0;
+    }
+
+    // IMC2 = √[ 1 − exp(‑2·(HXY2 − HXY)) ]
+    let exponent = (-2.0 * (hxy2 - hxy)).exp();   // natural exponential
+    let val = 1.0 - exponent;
+
+    // val is ≥ 0 by construction here.  In extremely rare cases it might dip
+    // slightly negative due to machine precision; clamp at 0 for safety.
+    val.max(0.0).sqrt()
 }
 
 #[inline]
@@ -103,9 +251,9 @@ pub fn difference_variance(pxmy:&[f64],k_vals_diff:&[f64]) -> f64 {
 
 #[inline]
 pub fn difference_entropy(pxmy:&[f64],eps:f64) -> f64 {
-    pxmy.iter().filter(|x| **x > 0.).map(|&x|{
+     - pxmy.iter().filter(|x| **x > 0.).map(|&x|{
             (x + eps).log2() * x
-    }).sum()
+    }).sum::<f64>()
 }
 
 #[inline]
@@ -115,12 +263,31 @@ pub fn difference_average(pxmy:&[f64],k_vals_diff:&[f64]) -> f64 {
 }
 
 #[inline]
-pub fn correlation(auto_corr:f64,ux:f64,uy:f64,sig_px:f64,sig_py:f64) -> f64 {
-    let d = sig_px * sig_py;
-    if d == 0. {
-        1.
-    }else {
-        (auto_corr - (ux*uy)) / d
+pub fn correlation(glcm: &[f64], n_bins: usize, ux: f64, uy: f64, eps: f64) -> f64 {
+    assert_eq!(glcm.len(), n_bins * n_bins);
+
+    let mut corm = 0.0;
+    let mut varx = 0.0;
+    let mut vary = 0.0;
+
+    for i in 0..n_bins {
+        let dx = (i+1) as f64 - ux;
+        for j in 0..n_bins {
+            let p = glcm[j * n_bins + i];
+            let dy = (j+1) as f64 - uy;
+            corm += p * dx * dy;
+            varx += p * dx * dx;
+            vary += p * dy * dy;
+        }
+    }
+
+    let sigx = varx.sqrt();
+    let sigy = vary.sqrt();
+
+    if sigx == 0.0 || sigy == 0.0 {
+        1.0
+    } else {
+        corm / (sigx * sigy + eps)
     }
 }
 
