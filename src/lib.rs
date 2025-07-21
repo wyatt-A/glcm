@@ -452,8 +452,8 @@ pub fn map_glcm(dims:&[usize],image:&[u16],n_features:usize,features:&mut [f64],
             feature_set[15] = glcm.chunks_exact(n_bins*n_bins)
             .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
             .map(|(glcm,(px,py))|{
-                //calc_mcc(glcm,&mut scratch_mat,n_bins,px,py,eps)
-                0.
+                calc_mcc(glcm,&mut scratch_mat,n_bins,px,py,eps)
+                //0.
             }).sum::<f64>() / n_angles as f64;
 
             // 17: INVERSE DIFFERENCE MOMENT NORMALIZED
