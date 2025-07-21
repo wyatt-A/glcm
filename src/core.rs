@@ -6,7 +6,7 @@ mod tests {
     use std::time::Instant;
     use array_lib::ArrayDim;
     use rand::{Rng};
-    use crate::subr::symmetrize_in_place;
+    use crate::subr::symmetrize_in_place_usize;
     use super::{compute_glcm, n_neighbors};
 
     #[test]
@@ -59,7 +59,7 @@ mod tests {
 
         let now = Instant::now();
         compute_glcm(&dims,&x,&r,n_levels,&mut addr_buff,&mut glcm);
-        symmetrize_in_place(&mut glcm,n_levels);
+        symmetrize_in_place_usize(&mut glcm, n_levels);
         let dur = now.elapsed();
         println!("Elapsed: {:.2?} us", dur.as_micros());
 
@@ -90,7 +90,7 @@ mod tests {
 
         let now = Instant::now();
         compute_glcm(&dims,&x,&r,n_levels,&mut addr_buff,&mut glcm);
-        symmetrize_in_place(&mut glcm,n_levels);
+        symmetrize_in_place_usize(&mut glcm, n_levels);
         //compute_symmetrical(n_levels,&glcm,&mut glcm_symm);
         let dur = now.elapsed();
         println!("Elapsed: {:.2?} us", dur.as_micros());
