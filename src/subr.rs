@@ -32,7 +32,7 @@ pub fn calc_sum_average(pxpy:&[f64],k_vals_sum:&[f64]) -> f64 {
 #[inline]
 pub fn calc_max_prob(glcm:&[f64]) -> f64 {
     *glcm.iter().max_by(|a,b| a.partial_cmp(b)
-        .expect("number must be finite"))
+        .expect("numbers must be finite"))
         .unwrap_or(&0.)
 }
 
@@ -394,7 +394,7 @@ pub fn calc_range_inclusive(patch_radius:usize, r:i32) -> [i32;2] {
 /// determines if a test point is within the grid with a given size. If it is, the test point
 /// is returned with only positive index values
 #[inline]
-pub fn in_bounds(grid_size:&[usize],test_point:&[i32]) -> Option<[usize;3]> {
+pub fn in_volume(grid_size:&[usize], test_point:&[i32]) -> Option<[usize;3]> {
     for (&s,&i) in grid_size.iter().zip(test_point.iter()) {
         if i < 0 || i >= s as i32 {
             return None
@@ -406,6 +406,12 @@ pub fn in_bounds(grid_size:&[usize],test_point:&[i32]) -> Option<[usize;3]> {
         test_point[2] as usize,
     ])
 }
+
+#[inline]
+pub fn in_box(box_radius:usize, local_coords:&[i32]) -> bool {
+    local_coords.iter().all(|&x| x.abs() <= box_radius as i32)
+}
+
 
 #[inline]
 pub fn symmetrize_in_place_f64(a: &mut [f64], n: usize) {
