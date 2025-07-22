@@ -84,7 +84,8 @@ pub fn calc_mcc(glcm:&[f64], scratch_matrix:&mut [f64], n_bins:usize, px:&[f64],
             scratch_matrix[j*n_bins + i] = s;
         }
     }
-    // calculate the sqrt of the second-largest eigenvalue
+
+    //calculate the sqrt of the second-largest eigenvalue
     let m = ndarray::ArrayView2::from_shape((n_bins,n_bins).f(),&scratch_matrix).unwrap();
     // this method was found to be faster than eigvalsh, which assumes symmetric matrices
     let mut e = m.eigvals().unwrap().to_vec();

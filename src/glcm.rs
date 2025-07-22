@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use array_lib::ArrayDim;
 use crate::subr::{calc_auto_correlation, calc_id, calc_idm, calc_idmn, calc_idn, calc_imc1, calc_imc2, calc_inverse_var, calc_marginal_col_prob, calc_marginal_row_prob, calc_marginals_inplace, calc_max_prob, calc_mcc, calc_mean_gray_intensity, calc_sum_average, calc_sum_entropy, calc_sum_of_squares, calc_cluster, calc_correlation, calc_difference_average, calc_difference_entropy, calc_difference_variance, calc_range_inclusive, in_volume, calc_joint_energy, calc_joint_entropy, std_dev, symmetrize_in_place_f64, in_box};
 use rayon::prelude::*;
-
+use crate::ui::{GLCMFeature, RadMapOpts};
 
 // this allocates a dynamically sized array to store GLCM data (1 per thread)
 // once a thread wants to write data to it, it will resize it appropriately
@@ -19,6 +19,7 @@ mod tests {
     use rand::Rng;
     use super::map_glcm;
     use crate::subr::change_dims;
+    use crate::ui::RadMapOpts;
 
     #[test]
     fn test_map_speed() {
@@ -53,8 +54,9 @@ mod tests {
             [ 0,  0 , 1],
         ];
 
+        let opts = RadMapOpts::default();
         let now = Instant::now();
-        map_glcm(&dims, &x, n_features, &mut features, &angles, n_bins, patch_radius,&[]);
+        map_glcm(&opts,&dims, &x, n_features, &mut features, &angles, n_bins, patch_radius,&[]);
         let dur = now.elapsed();
 
         let o_dim = ArrayDim::from_shape(&[n,n,n,n_features]);
@@ -109,7 +111,8 @@ mod tests {
         );
         let x = x;
 
-        map_glcm(&dims, &x, n_features, &mut features, &angles, n_bins, patch_radius, &[vox]);
+        let opts = RadMapOpts::default();
+        map_glcm(&opts,&dims, &x, n_features, &mut features, &angles, n_bins, patch_radius, &[vox]);
 
         let mut out = vec![];
         for i in 0..n_features {
@@ -161,13 +164,10 @@ mod tests {
     }
 }
 
-pub fn map_glcm(dims:&[usize],image:&[u16],n_features:usize,features:&mut [f64],angles:&[[i32;3]],n_bins:usize,patch_radius:usize,restricted_coords:&[[i32;3]]) {
+pub fn map_glcm(opts:&RadMapOpts,dims:&[usize],image:&[u16],n_features:usize,features:&mut [f64],angles:&[[i32;3]],n_bins:usize,patch_radius:usize,restricted_coords:&[[i32;3]]) {
 
     // number of angles to calculate a glcm. One glcm is calculated per angle
     let n_angles = angles.len();
-
-    // the patch is the local region over which the glcm is calculated. This is distinct from the angles
-    let patch_size = [2*patch_radius + 1;3];
 
     // size and shape of the input image
     let x_dims = ArrayDim::from_shape(&dims);
@@ -376,141 +376,186 @@ pub fn map_glcm(dims:&[usize],image:&[u16],n_features:usize,features:&mut [f64],
             /* FEATURE CALCULATIONS */
             /* ------------------------ */
 
+            use GLCMFeature::*;
+
             // 1: AUTOCORRELATION
-            feature_set[0] = glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).zip(sig_px.iter().zip(&sig_py)).map(|((glcm,(&ux,&uy)),(&s_px,&s_py))|{
-                calc_auto_correlation(glcm, n_bins)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(AUTO_CORRELATION) {
+                feature_set[AUTO_CORRELATION as usize] = glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).zip(sig_px.iter().zip(&sig_py)).map(|((glcm,(&ux,&uy)),(&s_px,&s_py))|{
+                    calc_auto_correlation(glcm, n_bins)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 2: JOINT AVERAGE
-            feature_set[1] = ux.iter().sum::<f64>() / n_angles as f64;
+            if opts.contains(JOINT_AVERAGE) {
+                feature_set[JOINT_AVERAGE as usize] = ux.iter().sum::<f64>() / n_angles as f64;
+            }
 
-            // features 3 - 6
-            let mut prom = 0.;
-            let mut shade = 0.;
-            let mut tend = 0.;
-            let mut cont = 0.;
-            glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).for_each(|(glcm,(&ux,&uy))|{
-                let [prom_,shade_,tend_,cont_] = calc_cluster(glcm, n_bins, ux, uy);
-                prom += prom_;
-                shade += shade_;
-                tend += tend_;
-                cont += cont_;
-            });
-            // mean over all angles
-            prom /= n_angles as f64;
-            shade /= n_angles as f64;
-            tend /= n_angles as f64;
-            cont /= n_angles as f64;
+            if opts.contains(CLUSTER_PROMINENCE) || opts.contains(CLUSTER_SHADE) ||
+                opts.contains(CLUSTER_TENDENCY) || opts.contains(CLUSTER_PROMINENCE) {
+                // features 3 - 6
+                let mut prom = 0.;
+                let mut shade = 0.;
+                let mut tend = 0.;
+                let mut cont = 0.;
+                glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).for_each(|(glcm,(&ux,&uy))|{
+                    let [prom_,shade_,tend_,cont_] = calc_cluster(glcm, n_bins, ux, uy);
+                    prom += prom_;
+                    shade += shade_;
+                    tend += tend_;
+                    cont += cont_;
+                });
+                // mean over all angles
+                prom /= n_angles as f64;
+                shade /= n_angles as f64;
+                tend /= n_angles as f64;
+                cont /= n_angles as f64;
 
-            // 3: CLUSTER PROMINENCE
-            feature_set[2] = prom;
+                // 3: CLUSTER PROMINENCE
+                feature_set[CLUSTER_PROMINENCE as usize] = prom;
 
-            // 4: CLUSTER SHADE
-            feature_set[3] = shade;
+                // 4: CLUSTER SHADE
+                feature_set[CLUSTER_SHADE as usize] = shade;
 
-            // 5: CLUSTER TENDENCY
-            feature_set[4] = tend;
+                // 5: CLUSTER TENDENCY
+                feature_set[CLUSTER_TENDENCY as usize] = tend;
 
-            // 6: CONTRAST
-            feature_set[5] = cont;
+                // 6: CONTRAST
+                feature_set[CONTRAST as usize] = cont;
+            }
 
             // 7: CORRELATION
-            feature_set[6] = glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).zip(sig_px.iter().zip(&sig_py)).map(|((glcm,(&ux,&uy)),(&s_px,&s_py))|{
-                calc_correlation(glcm, n_bins, ux, uy, eps)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(CORRELATION) {
+                feature_set[CORRELATION as usize] = glcm.chunks_exact(n_bins*n_bins).zip(ux.iter().zip(&uy)).zip(sig_px.iter().zip(&sig_py)).map(|((glcm,(&ux,&uy)),(&s_px,&s_py))|{
+                    calc_correlation(glcm, n_bins, ux, uy, eps)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 8: DIFFERENCE AVERAGE
-            feature_set[7] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_difference_average(pxmy, &kvald)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(DIFFERENCE_AVERAGE) {
+                feature_set[DIFFERENCE_AVERAGE as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_difference_average(pxmy, &kvald)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 9: DIFFERENCE ENTROPY
-            feature_set[8] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_difference_entropy(pxmy, eps)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(DIFFERENCE_ENTROPY) {
+                feature_set[DIFFERENCE_ENTROPY as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_difference_entropy(pxmy, eps)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 10: DIFFERENCE VARIANCE
-            feature_set[9] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_difference_variance(pxmy, &kvald)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(DIFFERENCE_VARIANCE) {
+                feature_set[DIFFERENCE_VARIANCE as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_difference_variance(pxmy, &kvald)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 11: JOINT ENERGY
-            feature_set[10] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
-                calc_joint_energy(glcm)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(JOINT_ENERGY) {
+                feature_set[JOINT_ENERGY as usize] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
+                    calc_joint_energy(glcm)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 12: JOINT ENTROPY
-            feature_set[11] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
-                calc_joint_entropy(glcm, eps)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(JOINT_ENTROPY) {
+                feature_set[JOINT_ENTROPY as usize] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
+                    calc_joint_entropy(glcm, eps)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 13: IMC1
-            feature_set[12] = glcm.chunks_exact(n_bins*n_bins).zip(&hxy)
-                .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
-                .map(|((glcm,&hxy),(px,py))|{
-                    calc_imc1(glcm,n_bins,px,py,hxy,eps)
-                }).sum::<f64>() / n_angles as f64;
+            if opts.contains(IMC1) {
+                feature_set[IMC1 as usize] = glcm.chunks_exact(n_bins*n_bins).zip(&hxy)
+                    .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
+                    .map(|((glcm,&hxy),(px,py))|{
+                        calc_imc1(glcm,n_bins,px,py,hxy,eps)
+                    }).sum::<f64>() / n_angles as f64;
+            }
 
             // 14: IMC2
-            feature_set[13] = hxy.iter()
-                .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
-                .map(|(&hxy,(px,py))|{
-                    calc_imc2(px,py,hxy,eps)
-                }).sum::<f64>() / n_angles as f64;
+            if opts.contains(IMC2) {
+                feature_set[IMC2 as usize] = hxy.iter()
+                    .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
+                    .map(|(&hxy,(px,py))|{
+                        calc_imc2(px,py,hxy,eps)
+                    }).sum::<f64>() / n_angles as f64;
+            }
 
             // 15: INVERSE DIFFERENCE MOMENT
-            feature_set[14] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_idm(pxmy,&kvald)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(INVERSE_DIFFERENCE_MOMENT) {
+                feature_set[INVERSE_DIFFERENCE_MOMENT as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_idm(pxmy,&kvald)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 16: MAXIMUM CORRELATION COEFFICIENT (the expensive one)
-            // let mut scratch_mat = vec![0.;n_bins*n_bins];
-            // feature_set[15] = glcm.chunks_exact(n_bins*n_bins)
-            //     .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
-            //     .map(|(glcm,(px,py))|{
-            //         calc_mcc(glcm,&mut scratch_mat,n_bins,px,py,eps)
-            //         //0.
-            //     }).sum::<f64>() / n_angles as f64;
+            if opts.contains(MAXIMUM_CORRELATION_COEFFICIENT) {
+                let mut scratch_mat = vec![0.;n_bins*n_bins];
+                feature_set[MAXIMUM_CORRELATION_COEFFICIENT as usize] = glcm.chunks_exact(n_bins*n_bins)
+                    .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
+                    .map(|(glcm,(px,py))|{
+                        calc_mcc(glcm,&mut scratch_mat,n_bins,px,py,eps)
+                        //0.
+                    }).sum::<f64>() / n_angles as f64;
+            }
 
             // 17: INVERSE DIFFERENCE MOMENT NORMALIZED
-            feature_set[16] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_idmn(pxmy,&kvald,n_bins)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(INVERSE_DIFFERENCE_MOMENT_NORMALIZED) {
+                feature_set[INVERSE_DIFFERENCE_MOMENT_NORMALIZED as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_idmn(pxmy,&kvald,n_bins)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 18: INVERSE DIFFERENCE
-            feature_set[17] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_id(pxmy,&kvald)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(INVERSE_DIFFERENCE) {
+                feature_set[INVERSE_DIFFERENCE as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_id(pxmy,&kvald)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 19: INVERSE DIFFERENCE NORMALIZED
-            feature_set[18] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_idn(pxmy,&kvald,n_bins)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(INVERSE_DIFFERENCE_NORMALIZED) {
+                feature_set[INVERSE_DIFFERENCE_NORMALIZED as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_idn(pxmy,&kvald,n_bins)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 20: INVERSE VARIANCE
-            feature_set[19] = pxmy.chunks_exact(n_bins).map(|pxmy|{
-                calc_inverse_var(pxmy,&kvald)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(INVERSE_VARIANCE) {
+                feature_set[INVERSE_VARIANCE as usize] = pxmy.chunks_exact(n_bins).map(|pxmy|{
+                    calc_inverse_var(pxmy,&kvald)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 21: MAXIMUM PROBABILITY
-            feature_set[20] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
-                calc_max_prob(glcm)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(MAXIMUM_PROBABILITY) {
+                feature_set[MAXIMUM_PROBABILITY as usize] = glcm.chunks_exact(n_bins*n_bins).map(|glcm|{
+                    calc_max_prob(glcm)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 22: SUM AVERAGE
-            feature_set[21] = pxpy.chunks_exact(n_pxpy).map(|pxpy|{
-                calc_sum_average(pxpy,&kvals)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(SUM_AVERAGE) {
+                feature_set[SUM_AVERAGE as usize] = pxpy.chunks_exact(n_pxpy).map(|pxpy|{
+                    calc_sum_average(pxpy,&kvals)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 23: SUM ENTROPY
-            feature_set[22] = pxpy.chunks_exact(n_pxpy).map(|pxpy|{
-                calc_sum_entropy(pxpy,eps)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(SUM_ENTROPY) {
+                feature_set[SUM_ENTROPY as usize] = pxpy.chunks_exact(n_pxpy).map(|pxpy|{
+                    calc_sum_entropy(pxpy,eps)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
             // 24: SUM OF SQUARES
-            feature_set[23] = glcm.chunks_exact(n_bins*n_bins).zip(&ux).map(|(glcm,&ux)|{
-                calc_sum_of_squares(glcm,n_bins,ux)
-            }).sum::<f64>() / n_angles as f64;
+            if opts.contains(SUM_OF_SQUARES) {
+                feature_set[SUM_OF_SQUARES as usize] = glcm.chunks_exact(n_bins*n_bins).zip(&ux).map(|(glcm,&ux)|{
+                    calc_sum_of_squares(glcm,n_bins,ux)
+                }).sum::<f64>() / n_angles as f64;
+            }
 
         });
 
