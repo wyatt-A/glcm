@@ -80,6 +80,7 @@ fn main() {
 
         let icon = get_icon().unwrap();
         let native_options = eframe::NativeOptions {
+            renderer: eframe::Renderer::Wgpu,
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([1024.0, 768.0])
                 .with_title("RadMap")
