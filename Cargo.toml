@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 array-lib = {git = "ssh://git@github.com/wyatt-A/array-lib", features = ["io-nifti"]}
-clap = "4.5.41"
+clap = { version = "4.5.41", features = ["derive"] }
 ndarray = "0.16.1"
 ndarray-linalg = { version = "0.17.0" }
 num-traits = "0.2.19"

@@ -13,6 +13,8 @@ mod tests {
     fn config() {
 
         let opts = RadMapOptsSer {
+            kernel_radius: 1,
+            n_bins: 32,
             features: vec![
                 Alias { feature: "auto_correlation".to_string(), alias: "autocorr".to_string() },
                 Alias { feature: "auto_correlation".to_string(), alias: "autocorr".to_string() },
@@ -125,8 +127,10 @@ impl FromStr for GLCMFeature {
 
 #[derive(Debug)]
 pub struct RadMapOpts {
-    pub separator: Option<String>,
+    pub kernel_radius: usize,
+    pub n_bins: usize,
     pub features: HashMap<GLCMFeature,String>,
+    pub separator: Option<String>,
 }
 
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -139,8 +143,10 @@ impl RadMapOpts {
             .collect();
 
         RadMapOpts {
+            kernel_radius: 1,
             separator: Some(separator),
             features,
+            n_bins: 32,
         }
     }
 
@@ -148,7 +154,15 @@ impl RadMapOpts {
         self.separator.as_deref().unwrap_or("_")
     }
 
-    pub fn features(&self) -> Vec<(GLCMFeature,String)> {
+    pub fn features(&self) -> HashSet<GLCMFeature> {
+        let mut features = HashSet::new();
+        self.features.iter().for_each(|(k,_)|{
+            features.insert(*k);
+        });
+        features
+    }
+
+    pub fn features_aliases(&self) -> Vec<(GLCMFeature, String)> {
         let mut f:Vec<_> = self.features.iter().map(|(k,v)| (*k,v.clone())).collect();
         f.sort_by_key(|k|k.1.clone());
         f
@@ -169,6 +183,8 @@ struct Alias {
 
 #[derive(Serialize,Deserialize,Debug)]
 pub struct RadMapOptsSer {
+    kernel_radius: i32,
+    n_bins: usize,
     features: Vec<Alias>,
     separator: Option<String>,
 }
@@ -182,8 +198,10 @@ impl Into<RadMapOpts> for RadMapOptsSer {
             h.insert(f, alias.alias);
         }
         RadMapOpts {
+            kernel_radius: self.kernel_radius.abs() as usize,
             separator: self.separator,
             features: h,
+            n_bins: self.n_bins,
         }
     }
 }
@@ -201,6 +219,8 @@ impl Into<RadMapOptsSer> for RadMapOpts {
         f.sort_by_key(|x| x.alias.clone());
 
         RadMapOptsSer {
+            kernel_radius: self.kernel_radius as i32,
+            n_bins: self.n_bins,
             features: f,
             separator: self.separator,
         }
