@@ -1,14 +1,18 @@
+use array_lib::ArrayDim;
 use num_traits::{ToPrimitive, Zero};
 use rayon::prelude::*;
 
-mod glcm;
+pub mod glcm;
 mod core;
 mod subr;
-mod ui;
+pub mod ui;
+pub mod icon;
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Instant;
     use array_lib::ArrayDim;
     use array_lib::io_nifti::{read_nifti, write_nifti, write_nifti_with_header};
@@ -34,8 +38,8 @@ mod tests {
         generate_angles(&mut angles,opts.kernel_radius);
         let mut out = vec![0f64;odims.numel()];
         let mut swapped = vec![0f64;odims.numel()];
-
-        map_glcm(&opts.features(),vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[]);
+        let prog = Arc::new(AtomicUsize::new(0));
+        map_glcm(&opts.features(),vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],prog.clone());
 
         change_dims(&vol_dims,24,&out,&mut swapped);
 
@@ -79,8 +83,8 @@ mod tests {
 
         // pre-masked
         write_nifti("regression_test_img",&img,dims);
-
-        map_glcm(&opts.features(),&vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[]);
+        let prog = Arc::new(AtomicUsize::new(0));
+        map_glcm(&opts.features(),&vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],prog);
 
         let mut swapped = vec![0f64;out.len()];
         change_dims(&vol_dims,24,&out,&mut swapped);
@@ -128,7 +132,8 @@ mod tests {
         let x = x;
 
         let opts = RadMapOpts::default();
-        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius, &[vox]);
+        let prog = Arc::new(AtomicUsize::new(0));
+        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius, &[vox],prog.clone());
 
         let mut out = vec![];
         for i in 0..n_features {
@@ -349,7 +354,7 @@ mod tests {
 
 /// discretize gray level intensities 'x' into 'n_bins' within some roi 'mask'. The result is
 /// written to 'd' as unsigned 16-bit values
-fn discretize_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64], mask:&[M], d:&mut [u16]) {
+pub fn discretize_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64], mask:&[M], d:&mut [u16]) {
 
     assert!(n_bins > 0);
     assert!(n_bins < u16::MAX as usize);
@@ -387,7 +392,7 @@ fn discretize_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64], mas
 
 /// discretize gray level intensities 'x' into bins within some roi 'mask' given a 'bin_width.' The result is
 /// written to 'd' as unsigned 16-bit values
-fn discretize_bin_width<M:Zero + Copy + Send + Sync>(bin_width:f64, x:&[f64], mask:&[M], d:&mut [u16]) {
+pub fn discretize_bin_width<M:Zero + Copy + Send + Sync>(bin_width:f64, x:&[f64], mask:&[M], d:&mut [u16]) {
 
     assert_eq!(mask.len(), x.len());
     assert_eq!(d.len(), x.len());
@@ -452,4 +457,15 @@ pub fn generate_angles(angles: &mut [[i32; 3]], r: usize) {
     }
 
     debug_assert_eq!(idx, angles.len());
+}
+
+/// swaps the feature dims to the last dimension
+pub fn change_dims(dims:&[usize],n_features:usize,x:&[f64],y:&mut [f64]) {
+    let i_dims = ArrayDim::from_shape(&[n_features,dims[0],dims[1],dims[2]]);
+    let o_dims = ArrayDim::from_shape(&[dims[0],dims[1],dims[2],n_features]);
+    y.par_iter_mut().enumerate().for_each(|(i,y)|{
+        let [i,j,k,f,..] = o_dims.calc_idx(i);
+        let addr = i_dims.calc_addr(&[f,i,j,k]);
+        *y = x[addr];
+    });
 }

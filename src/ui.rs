@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fmt::{Display, Formatter, Write};
+use std::{fmt, io};
+use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
@@ -125,7 +128,7 @@ impl FromStr for GLCMFeature {
 
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct RadMapOpts {
     pub kernel_radius: usize,
     pub n_bins: usize,
@@ -133,10 +136,8 @@ pub struct RadMapOpts {
     pub separator: Option<String>,
 }
 
-use strum::{Display, EnumIter, IntoEnumIterator};
-
-impl RadMapOpts {
-    pub fn default() -> Self {
+impl Default for RadMapOpts {
+    fn default() -> Self {
         let separator = "_".to_string();
         let features = GLCMFeature::iter()
             .map(|feat| (feat, feat.to_string().to_lowercase()))
@@ -148,6 +149,28 @@ impl RadMapOpts {
             features,
             n_bins: 32,
         }
+    }
+}
+
+use strum::{Display, EnumIter, IntoEnumIterator};
+
+impl RadMapOpts {
+
+    pub fn from_file(toml_file:impl AsRef<Path>) -> Result<Self,io::Error> {
+        let mut f = File::open(toml_file.as_ref())?;
+        let mut toml_str = String::new();
+        f.read_to_string(&mut toml_str)?;
+        let opts_ser:RadMapOptsSer = toml::from_str(&toml_str).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        let opts:RadMapOpts = opts_ser.into();
+        Ok(opts)
+    }
+
+    pub fn to_file(&self, toml_file:impl AsRef<Path>) -> Result<(), io::Error> {
+        let mut f = File::create(toml_file.as_ref())?;
+        let ser:RadMapOptsSer = self.clone().into();
+        let ts = toml::to_string_pretty(&ser).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        f.write_all(ts.as_bytes())?;
+        Ok(())
     }
 
     pub fn separator(&self) -> &str {

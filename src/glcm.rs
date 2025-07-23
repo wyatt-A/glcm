@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use array_lib::ArrayDim;
 use crate::subr::{calc_auto_correlation, calc_id, calc_idm, calc_idmn, calc_idn, calc_imc1, calc_imc2, calc_inverse_var, calc_marginal_col_prob, calc_marginal_row_prob, calc_marginals_inplace, calc_max_prob, calc_mcc, calc_mean_gray_intensity, calc_sum_average, calc_sum_entropy, calc_sum_of_squares, calc_cluster, calc_correlation, calc_difference_average, calc_difference_entropy, calc_difference_variance, calc_range_inclusive, in_volume, calc_joint_energy, calc_joint_entropy, std_dev, symmetrize_in_place_f64, in_box};
 use rayon::prelude::*;
@@ -13,6 +15,8 @@ thread_local! {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Instant;
     use array_lib::ArrayDim;
     use array_lib::io_nifti::write_nifti;
@@ -57,7 +61,8 @@ mod tests {
 
         let opts = RadMapOpts::default();
         let now = Instant::now();
-        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius,&[]);
+        let prog = Arc::new(AtomicUsize::new(0));
+        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius,&[],prog.clone());
         let dur = now.elapsed();
 
         let o_dim = ArrayDim::from_shape(&[n,n,n,n_features]);
@@ -72,12 +77,9 @@ mod tests {
         println!("computed {vox_per_sec} voxels / sec")
     }
 
-    /// computes GLCM values for a small example to compare to pyradiomic's outputs with the same
-    /// parameters
-
 }
 
-pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]]) {
+pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]], progress:Arc<AtomicUsize>) {
 
     let n_features = 24;
 
@@ -103,6 +105,7 @@ pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16],
         // if this voxel is 0, then skip all the hard work. We assume voxels that are 0 are masked out
         if image[g_idx] == 0 {
             feature_set.fill(0.);
+            progress.fetch_add(1, Ordering::Relaxed);
             return;
         }
 
@@ -120,7 +123,8 @@ pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16],
 
         // return is we are restricting the coordinates for debugging and this coordinate isn't listed
         if !in_restricted && !restricted_coords.is_empty() {
-            feature_set.fill(f64::NAN);
+            feature_set.fill(0.);
+            progress.fetch_add(1, Ordering::Relaxed);
             return;
         }
 
@@ -471,6 +475,9 @@ pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16],
                     calc_sum_of_squares(glcm,n_bins,ux)
                 }).sum::<f64>() / n_angles as f64;
             }
+
+            // increment the progress counter
+            progress.fetch_add(1,Ordering::Relaxed);
 
         });
 

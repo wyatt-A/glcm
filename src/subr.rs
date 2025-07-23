@@ -452,13 +452,3 @@ pub fn symmetrize_in_place_usize(a: &mut [usize], n: usize) {
     }
 }
 
-/// swaps the feature dims to the last dimension
-pub fn change_dims(dims:&[usize],n_features:usize,x:&[f64],y:&mut [f64]) {
-    let i_dims = ArrayDim::from_shape(&[n_features,dims[0],dims[1],dims[2]]);
-    let o_dims = ArrayDim::from_shape(&[dims[0],dims[1],dims[2],n_features]);
-    y.par_iter_mut().enumerate().for_each(|(i,y)|{
-        let [i,j,k,f,..] = o_dims.calc_idx(i);
-        let addr = i_dims.calc_addr(&[f,i,j,k]);
-        *y = x[addr];
-    });
-}
