@@ -81,6 +81,9 @@ mod tests {
 
 pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]], progress:Arc<AtomicUsize>) {
 
+    println!("dims = {:?}",dims);
+    println!("image = {}",image.len());
+
     let n_features = 24;
 
     // number of angles to calculate a glcm. One glcm is calculated per angle

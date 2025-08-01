@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use array_lib::ArrayDim;
-//use array_lib::io_nifti::{read_nifti, write_nifti_with_header};
+use array_lib::io_nifti::{read_nifti_to_array, write_nifti_from_array};
 use array_lib::io_nrrd::{read_nrrd_to_array, write_nrrd_from_array, Encoding};
 use clap::Parser;
 use glcm::ui::{GLCMFeature, GLCMFeatureIter, RadMapOpts, RadMapOptsSer};
@@ -289,13 +289,16 @@ impl eframe::App for MyApp {
                             let prog_handle = self.progress.clone();
 
                             let h = std::thread::spawn(move || {
-                                //read_nifti::<f64>(img_path)
-                                read_nrrd_to_array(img_path)
+                                read_nifti_to_array(img_path)
+
+                                //read_nrrd_to_array::<f64>(img_path)
+
                             });
 
                             let mask = if let Some(mask_path) = self.valid_mask_path.clone() {
                                 let hm = std::thread::spawn(move || {
-                                    read_nrrd_to_array::<f64>(mask_path)
+                                    //read_nrrd_to_array::<f64>(mask_path)
+                                    read_nifti_to_array::<f64>(mask_path)
                                 });
                                 let (msk,..) = hm.join().unwrap();
                                 Some(msk)
@@ -318,8 +321,8 @@ impl eframe::App for MyApp {
                                     let i = f as usize;
                                     let vol = &out[i*vol_stride..(i+1) * vol_stride];
                                     let path = out_dir.join(format!("{}{}{}",out_base,opts.separator(),alias));
-                                    write_nrrd_from_array(path,vol,img_dims,Some(&header),false,Encoding::raw);
-                                    //write_nifti_with_header(path,vol,img_dims,&header);
+                                    //write_nrrd_from_array(path,vol,img_dims,Some(&header),false,Encoding::raw);
+                                    write_nifti_from_array(path,vol,img_dims,Some(&header));
                                 }
 
                             });
