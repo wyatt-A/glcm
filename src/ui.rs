@@ -6,11 +6,11 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
-use strum::EnumDiscriminants;
+use glcm::GLCMFeature;
 
 #[cfg(test)]
 mod tests {
-    use crate::ui::{Alias, GLCMFeature, RadMapOpts, RadMapOptsSer};
+    use crate::ui::{Alias, GLCMFeature, MapOpts, RadMapOptsSer};
 
     #[test]
     fn config() {
@@ -28,54 +28,18 @@ mod tests {
         let ts = toml::to_string(&opts).unwrap();
         println!("{}", ts);
 
-        let opts:RadMapOpts = opts.into();
+        let opts: MapOpts = opts.into();
 
         println!("{:?}", opts);
 
         println!("{}",GLCMFeature::CONTRAST.index());
 
-        let ops:RadMapOptsSer = RadMapOpts::default().into();
+        let ops:RadMapOptsSer = MapOpts::default().into();
         let ts = toml::to_string(&ops).unwrap();
         println!("{ts}")
 
     }
 
-}
-
-#[derive(Debug,Copy,Clone,Hash,Eq,PartialEq,EnumIter,Display)]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum GLCMFeature {
-    AUTO_CORRELATION,
-    JOINT_AVERAGE,
-    CLUSTER_PROMINENCE,
-    CLUSTER_SHADE,
-    CLUSTER_TENDENCY,
-    CONTRAST,
-    CORRELATION,
-    DIFFERENCE_AVERAGE,
-    DIFFERENCE_ENTROPY,
-    DIFFERENCE_VARIANCE,
-    JOINT_ENERGY,
-    JOINT_ENTROPY,
-    IMC1,
-    IMC2,
-    INVERSE_DIFFERENCE_MOMENT,
-    MAXIMUM_CORRELATION_COEFFICIENT,
-    INVERSE_DIFFERENCE_MOMENT_NORMALIZED,
-    INVERSE_DIFFERENCE,
-    INVERSE_DIFFERENCE_NORMALIZED,
-    INVERSE_VARIANCE,
-    MAXIMUM_PROBABILITY,
-    SUM_AVERAGE,
-    SUM_ENTROPY,
-    SUM_OF_SQUARES,
-}
-
-impl GLCMFeature {
-    pub fn index(&self) -> usize {
-        *self as usize
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,24 +90,22 @@ impl FromStr for GLCMFeature {
     }
 }
 
-
-
 #[derive(Debug,Clone)]
-pub struct RadMapOpts {
+pub struct MapOpts {
     pub kernel_radius: usize,
     pub n_bins: usize,
     pub features: HashMap<GLCMFeature,String>,
     pub separator: Option<String>,
 }
 
-impl Default for RadMapOpts {
+impl Default for MapOpts {
     fn default() -> Self {
         let separator = "_".to_string();
         let features = GLCMFeature::iter()
             .map(|feat| (feat, feat.to_string().to_lowercase()))
             .collect();
 
-        RadMapOpts {
+        MapOpts {
             kernel_radius: 1,
             separator: Some(separator),
             features,
@@ -153,15 +115,16 @@ impl Default for RadMapOpts {
 }
 
 use strum::{Display, EnumIter, IntoEnumIterator};
+use crate::glcm;
 
-impl RadMapOpts {
+impl MapOpts {
 
     pub fn from_file(toml_file:impl AsRef<Path>) -> Result<Self,io::Error> {
         let mut f = File::open(toml_file.as_ref())?;
         let mut toml_str = String::new();
         f.read_to_string(&mut toml_str)?;
         let opts_ser:RadMapOptsSer = toml::from_str(&toml_str).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
-        let opts:RadMapOpts = opts_ser.into();
+        let opts: MapOpts = opts_ser.into();
         Ok(opts)
     }
 
@@ -212,15 +175,15 @@ pub struct RadMapOptsSer {
     separator: Option<String>,
 }
 
-impl Into<RadMapOpts> for RadMapOptsSer {
-    fn into(self) -> RadMapOpts {
+impl Into<MapOpts> for RadMapOptsSer {
+    fn into(self) -> MapOpts {
         let mut h = HashMap::new();
         for alias in self.features {
             let f = GLCMFeature::from_str(&alias.feature)
                 .expect(&format!("invalid glcm feature identifier: {}", alias.feature).as_str());
             h.insert(f, alias.alias);
         }
-        RadMapOpts {
+        MapOpts {
             kernel_radius: self.kernel_radius.abs() as usize,
             separator: self.separator,
             features: h,
@@ -229,7 +192,7 @@ impl Into<RadMapOpts> for RadMapOptsSer {
     }
 }
 
-impl Into<RadMapOptsSer> for RadMapOpts {
+impl Into<RadMapOptsSer> for MapOpts {
     fn into(self) -> RadMapOptsSer {
 
         let mut f:Vec<_> = self.features.iter().map(|(k,v)|{

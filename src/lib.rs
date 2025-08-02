@@ -1,28 +1,27 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use array_lib::ArrayDim;
 use num_traits::{ToPrimitive, Zero};
 use rayon::prelude::*;
+use crate::glcm::map_glcm;
+use crate::ui::MapOpts;
 
 pub mod glcm;
 mod core;
 mod subr;
 pub mod ui;
-pub mod icon;
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
-    use std::time::Instant;
     use array_lib::ArrayDim;
-    use array_lib::io_nifti::{read_nifti, write_nifti, write_nifti_with_header};
-    use rand::distr::StandardUniform;
+    use array_lib::io_nifti::{read_nifti, write_nifti};
     use rand::Rng;
     use rayon::prelude::*;
-    use crate::{discretize_bin_count, discretize_bin_width, generate_angles, n_angles};
+    use crate::{change_dims, discretize_by_bin_count, discretize_by_bin_width, generate_angles, n_angles};
     use crate::glcm::map_glcm;
-    use crate::subr::change_dims;
-    use crate::ui::RadMapOpts;
+    use crate::ui::MapOpts;
 
     #[test]
     fn test_regression() {
@@ -47,10 +46,10 @@ mod tests {
 
     }
 
-    fn test_regresion_params() -> RadMapOpts {
+    fn test_regresion_params() -> MapOpts {
         let n_bins = 64;
         let kernel_radius = 1;
-        let mut opts = RadMapOpts::default();
+        let mut opts = MapOpts::default();
         opts.kernel_radius = kernel_radius;
         opts.n_bins = n_bins;
         opts
@@ -131,7 +130,7 @@ mod tests {
         );
         let x = x;
 
-        let opts = RadMapOpts::default();
+        let opts = MapOpts::default();
         let prog = Arc::new(AtomicUsize::new(0));
         map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius, &[vox],prog.clone());
 
@@ -184,152 +183,14 @@ mod tests {
 
     }
 
-
-    // #[test]
-    // fn test_map_accuracy() {
-    //
-    //     let (mask,mask_dims,mask_h) = read_nifti::<f64>("B:/ProjectSpace/wa41/RadMapTest/24SD022/orthob2000/MASK.nii");
-    //
-    //     let mask:Vec<_> = mask.par_iter().map(|&x| if x == 0. {0u8} else {1u8}).collect();
-    //     let n_vox = mask.iter().filter(|m| **m > 0).count();
-    //
-    //     let n_bins = 64;
-    //     let n_features = 24;
-    //     let patch_radius = 1;
-    //
-    //     let mut angles = vec![[0,0,0];n_angles(patch_radius)];
-    //     generate_angles(&mut angles,patch_radius);
-    //
-    //     let (img,img_dims,img_h) = read_nifti::<f64>("B:/ProjectSpace/wa41/RadMapTest/24SD022/orthob2000/Reg_2000_avg-ds.nii");
-    //
-    //     let dims = &img_dims.shape()[0..3];
-    //
-    //     let feature_dims = ArrayDim::from_shape(&[n_features,dims[0],dims[1],dims[2]]);
-    //     let out_dims = ArrayDim::from_shape(&[dims[0],dims[1],dims[2],n_features]);
-    //     let mut features = feature_dims.alloc(0f64);
-    //
-    //     let mut bins = vec![0;img.len()];
-    //     discretize_bin_count(n_bins,&img,&mask,&mut bins);
-    //
-    //     let opts = RadMapOpts::default();
-    //
-    //     println!("running glcm ...");
-    //     let now = Instant::now();
-    //     map_glcm(&opts.features(),dims,&bins,&mut features,&angles,n_bins,patch_radius,&[]);
-    //     let dur = now.elapsed();
-    //     println!("done.");
-    //
-    //     println!("processed {n_vox} voxels in {} secs.",dur.as_secs_f64());
-    //
-    //     let mut out = out_dims.alloc(0f64);
-    //     change_dims(dims,n_features,&features,&mut out);
-    //
-    //     let out_dir = "B:/ProjectSpace/wa41/RadMapTest/24SD022/orthob2000";
-    //
-    //     let base = "orthob2000";
-    //     let vol_stride:usize = dims.iter().product();
-    //     for (f,alias) in opts.features_aliases() {
-    //         let i = f as usize;
-    //         let vol = &out[i*vol_stride..(i+1) * vol_stride];
-    //         let path = Path::new(out_dir).join(format!("{}{}{}",base,opts.separator(),alias));
-    //         write_nifti_with_header(path,vol,img_dims,&img_h);
-    //     }
-    //
-    // }
-
-
-    // #[test]
-    // fn test_values() {
-    //
-    //
-    //     let reference_files = [
-    //         "RadiomicMapping_original_glcm_Autocorrelation_2.nii",
-    //         "RadiomicMapping_original_glcm_ClusterProminence_2.nii",
-    //         "RadiomicMapping_original_glcm_ClusterShade_2.nii",
-    //         "RadiomicMapping_original_glcm_ClusterTendency_2.nii",
-    //         "RadiomicMapping_original_glcm_Contrast_2.nii",
-    //         "RadiomicMapping_original_glcm_Correlation_2.nii",
-    //         "RadiomicMapping_original_glcm_DifferenceAverage_2.nii",
-    //         "RadiomicMapping_original_glcm_DifferenceEntropy_2.nii",
-    //         "RadiomicMapping_original_glcm_DifferenceVariance_2.nii",
-    //         "RadiomicMapping_original_glcm_Id_2.nii",
-    //         "RadiomicMapping_original_glcm_Idm_2.nii",
-    //         "RadiomicMapping_original_glcm_Idmn_2.nii",
-    //         "RadiomicMapping_original_glcm_Idn_2.nii",
-    //         "RadiomicMapping_original_glcm_Imc1_2.nii",
-    //         "RadiomicMapping_original_glcm_Imc2_2.nii",
-    //         "RadiomicMapping_original_glcm_InverseVariance_2.nii",
-    //         "RadiomicMapping_original_glcm_JointAverage_2.nii",
-    //         "RadiomicMapping_original_glcm_JointEnergy_2.nii",
-    //         "RadiomicMapping_original_glcm_JointEntropy_2.nii",
-    //         "RadiomicMapping_original_glcm_MaximumProbability_2.nii",
-    //         "RadiomicMapping_original_glcm_SumEntropy_2.nii",
-    //         "RadiomicMapping_original_glcm_SumSquares_2.nii",
-    //     ];
-    //
-    //     let test_files = [
-    //         "orthob2000_auto_correlation.nii",
-    //         "orthob2000_cluster_prominence.nii",
-    //         "orthob2000_cluster_shade.nii",
-    //         "orthob2000_cluster_tendency.nii",
-    //         "orthob2000_contrast.nii",
-    //         "orthob2000_correlation.nii",
-    //         "orthob2000_difference_average.nii",
-    //         "orthob2000_difference_entropy.nii",
-    //         "orthob2000_difference_variance.nii",
-    //         "orthob2000_inverse_difference.nii",
-    //         "orthob2000_inverse_difference_moment.nii",
-    //         "orthob2000_inverse_difference_moment_normalized.nii",
-    //         "orthob2000_inverse_difference_normalized.nii",
-    //         "orthob2000_imc1.nii",
-    //         "orthob2000_imc2.nii",
-    //         "orthob2000_inverse_variance.nii",
-    //         "orthob2000_joint_average.nii",
-    //         "orthob2000_joint_energy.nii",
-    //         "orthob2000_joint_entropy.nii",
-    //         "orthob2000_maximum_probability.nii",
-    //         "orthob2000_sum_entropy.nii",
-    //         "orthob2000_sum_of_squares.nii",
-    //     ];
-    //
-    //     let base = Path::new("B:\\ProjectSpace\\wa41\\RadMapTest\\24SD022\\original_results_corrected");
-    //
-    //     let vox_reference = reference_files.par_iter().map(|f| {
-    //         let p = base.join(f);
-    //         println!("reading {}",p.display());
-    //         let (refer,rdims,..) = read_nifti::<f64>(p);
-    //         let a = rdims.calc_addr(&[95,101,43]);
-    //         refer[a]
-    //     }).collect::<Vec<_>>();
-    //
-    //     let base = Path::new("B:\\ProjectSpace\\wa41\\RadMapTest\\24SD022\\orthob2000");
-    //     let vox_test = test_files.par_iter().map(|f| {
-    //         let p = base.join(f);
-    //         println!("reading {}",p.display());
-    //         let (test,tdims,..) = read_nifti::<f64>(p);
-    //         let a = tdims.calc_addr(&[113,125,112]);
-    //         test[a]
-    //     }).collect::<Vec<_>>();
-    //
-    //     let norm_res = vox_reference.iter().zip(vox_test.iter()).map(|(&a,&b)| (a - b).powi(2)).sum::<f64>().sqrt();
-    //
-    //
-    //     let diff:Vec<_> = vox_reference.iter().zip(vox_test.iter()).map(|(&a,&b)| (a - b).abs()).collect();
-    //
-    //     println!("diff^2: {:?}", diff);
-    //
-    //     println!("norm_res = {:?}",norm_res);
-    //
-    // }
-
     #[test]
     fn test_discretize() {
         let x = [1.,3.,10.,11.,15.,62.];
         let m = [0,1,1,1,1,1];
         let mut d = vec![0;x.len()];
-        discretize_bin_count(3,&x,&m,&mut d);
+        discretize_by_bin_count(3, &x, &m, &mut d);
         assert_eq!(d,[0, 1, 1, 1, 1, 3]);
-        discretize_bin_width(2.,&x,&m,&mut d);
+        discretize_by_bin_width(2., &x, &m, &mut d);
         assert_eq!(d,[0, 1, 5, 5, 7, 31]);
     }
 
@@ -350,11 +211,44 @@ mod tests {
 
 }
 
+pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:ArrayDim, progress:Arc<AtomicUsize>) -> (Vec<f64>, ArrayDim) {
+
+    let vol_dims = &dims.shape()[0..3];
+
+    let mut bins = vec![0;dims.numel()];
+
+    let mask = if let Some(mask) = mask {
+        mask
+    }else {
+        vec![1.; dims.numel()]
+    };
+
+    let mask:Vec<u16> = mask.into_iter().map(|x| if x > 0. {1u16} else {0u16}).collect();
+
+    discretize_by_bin_count(opts.n_bins, &image, &mask, &mut bins);
+
+    let mut angles = vec![[0,0,0];n_angles(opts.kernel_radius)];
+    generate_angles(&mut angles,opts.kernel_radius);
+
+    let odims = ArrayDim::from_shape(&[24,vol_dims[0],vol_dims[1],vol_dims[2]]);
+
+    let mut out = vec![0f64;odims.numel()];
+
+    map_glcm(&opts.features(),vol_dims,&bins,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],progress);
+
+    let mut features = odims.alloc(0f64);
+    change_dims(vol_dims,24,&out,&mut features);
+
+    let fdims =  ArrayDim::from_shape(&[vol_dims[0],vol_dims[1],vol_dims[2],24]);
+
+    (features,fdims)
+
+}
 
 
 /// discretize gray level intensities 'x' into 'n_bins' within some roi 'mask'. The result is
 /// written to 'd' as unsigned 16-bit values
-pub fn discretize_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64], mask:&[M], d:&mut [u16]) {
+pub fn discretize_by_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64], mask:&[M], d:&mut [u16]) {
 
     assert!(n_bins > 0);
     assert!(n_bins < u16::MAX as usize);
@@ -392,7 +286,7 @@ pub fn discretize_bin_count<M:Zero + Copy + Send + Sync>(n_bins:usize, x:&[f64],
 
 /// discretize gray level intensities 'x' into bins within some roi 'mask' given a 'bin_width.' The result is
 /// written to 'd' as unsigned 16-bit values
-pub fn discretize_bin_width<M:Zero + Copy + Send + Sync>(bin_width:f64, x:&[f64], mask:&[M], d:&mut [u16]) {
+pub fn discretize_by_bin_width<M:Zero + Copy + Send + Sync>(bin_width:f64, x:&[f64], mask:&[M], d:&mut [u16]) {
 
     assert_eq!(mask.len(), x.len());
     assert_eq!(d.len(), x.len());

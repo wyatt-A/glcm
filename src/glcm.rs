@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use array_lib::ArrayDim;
 use crate::subr::{calc_auto_correlation, calc_id, calc_idm, calc_idmn, calc_idn, calc_imc1, calc_imc2, calc_inverse_var, calc_marginal_col_prob, calc_marginal_row_prob, calc_marginals_inplace, calc_max_prob, calc_mcc, calc_mean_gray_intensity, calc_sum_average, calc_sum_entropy, calc_sum_of_squares, calc_cluster, calc_correlation, calc_difference_average, calc_difference_entropy, calc_difference_variance, calc_range_inclusive, in_volume, calc_joint_energy, calc_joint_entropy, std_dev, symmetrize_in_place_f64, in_box};
 use rayon::prelude::*;
-use crate::ui::{GLCMFeature, RadMapOpts};
+use strum::{Display, EnumIter};
+use crate::ui::MapOpts;
 
 // this allocates a dynamically sized array to store GLCM data (1 per thread)
 // once a thread wants to write data to it, it will resize it appropriately
@@ -22,9 +23,9 @@ mod tests {
     use array_lib::io_nifti::write_nifti;
     use rand;
     use rand::Rng;
+    use crate::change_dims;
     use super::map_glcm;
-    use crate::subr::change_dims;
-    use crate::ui::RadMapOpts;
+    use crate::ui::MapOpts;
 
     #[test]
     fn test_map_speed() {
@@ -59,7 +60,7 @@ mod tests {
             [ 0,  0 , 1],
         ];
 
-        let opts = RadMapOpts::default();
+        let opts = MapOpts::default();
         let now = Instant::now();
         let prog = Arc::new(AtomicUsize::new(0));
         map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius,&[],prog.clone());
@@ -79,6 +80,43 @@ mod tests {
 
 }
 
+#[derive(Debug,Copy,Clone,Hash,Eq,PartialEq,EnumIter,Display)]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum GLCMFeature {
+    AUTO_CORRELATION,
+    JOINT_AVERAGE,
+    CLUSTER_PROMINENCE,
+    CLUSTER_SHADE,
+    CLUSTER_TENDENCY,
+    CONTRAST,
+    CORRELATION,
+    DIFFERENCE_AVERAGE,
+    DIFFERENCE_ENTROPY,
+    DIFFERENCE_VARIANCE,
+    JOINT_ENERGY,
+    JOINT_ENTROPY,
+    IMC1,
+    IMC2,
+    INVERSE_DIFFERENCE_MOMENT,
+    MAXIMUM_CORRELATION_COEFFICIENT,
+    INVERSE_DIFFERENCE_MOMENT_NORMALIZED,
+    INVERSE_DIFFERENCE,
+    INVERSE_DIFFERENCE_NORMALIZED,
+    INVERSE_VARIANCE,
+    MAXIMUM_PROBABILITY,
+    SUM_AVERAGE,
+    SUM_ENTROPY,
+    SUM_OF_SQUARES,
+}
+
+impl GLCMFeature {
+    pub fn index(&self) -> usize {
+        *self as usize
+    }
+}
+
+/// core mapping routing
 pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]], progress:Arc<AtomicUsize>) {
 
     println!("dims = {:?}",dims);
