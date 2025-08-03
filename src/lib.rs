@@ -236,15 +236,20 @@ pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:A
 
     map_glcm(&opts.features(),vol_dims,&bins,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[], opts.max_threads, progress);
 
-    // save some memory
-    let out:Vec<_> = out.into_par_iter().map(|x| x as f32).collect();
-
-    let mut features = odims.alloc(0f32);
-    change_dims(vol_dims,24,&out,&mut features);
-
-    let fdims =  ArrayDim::from_shape(&[vol_dims[0],vol_dims[1],vol_dims[2],24]);
-
-    (features,fdims)
+    let mut builder = rayon::ThreadPoolBuilder::new();
+    let thread_pool = if let Some(max_threads) = opts.max_threads {
+        builder.num_threads(max_threads).build().unwrap()
+    }else {
+        builder.build().unwrap()
+    };
+    thread_pool.install(|| {
+        // save some memory
+        let out:Vec<_> = out.into_par_iter().map(|x| x as f32).collect();
+        let mut features = odims.alloc(0f32);
+        change_dims(vol_dims,24,&out,&mut features);
+        let fdims =  ArrayDim::from_shape(&[vol_dims[0],vol_dims[1],vol_dims[2],24]);
+        return (features,fdims)
+    })
 
 }
 
