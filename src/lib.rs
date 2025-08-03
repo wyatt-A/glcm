@@ -38,7 +38,7 @@ mod tests {
         let mut out = vec![0f64;odims.numel()];
         let mut swapped = vec![0f64;odims.numel()];
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(&opts.features(),vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],prog.clone());
+        map_glcm(&opts.features(),vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],None,prog.clone());
 
         change_dims(&vol_dims,24,&out,&mut swapped);
 
@@ -83,7 +83,7 @@ mod tests {
         // pre-masked
         write_nifti("regression_test_img",&img,dims);
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(&opts.features(),&vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],prog);
+        map_glcm(&opts.features(),&vol_dims,&img,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],None,prog);
 
         let mut swapped = vec![0f64;out.len()];
         change_dims(&vol_dims,24,&out,&mut swapped);
@@ -132,7 +132,7 @@ mod tests {
 
         let opts = MapOpts::default();
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius, &[vox],prog.clone());
+        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius, &[vox],None,prog.clone());
 
         let mut out = vec![];
         for i in 0..n_features {
@@ -234,7 +234,7 @@ pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:A
 
     let mut out = vec![0f64;odims.numel()];
 
-    map_glcm(&opts.features(),vol_dims,&bins,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],progress);
+    map_glcm(&opts.features(),vol_dims,&bins,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[], opts.max_threads, progress);
 
     // save some memory
     let out:Vec<_> = out.into_par_iter().map(|x| x as f32).collect();

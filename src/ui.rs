@@ -96,6 +96,7 @@ pub struct MapOpts {
     pub n_bins: usize,
     pub features: HashMap<GLCMFeature,String>,
     pub separator: Option<String>,
+    pub max_threads: Option<usize>,
 }
 
 impl Default for MapOpts {
@@ -110,6 +111,7 @@ impl Default for MapOpts {
             separator: Some(separator),
             features,
             n_bins: 32,
+            max_threads: None,
         }
     }
 }
@@ -188,6 +190,7 @@ impl Into<MapOpts> for RadMapOptsSer {
             separator: self.separator,
             features: h,
             n_bins: self.n_bins,
+            max_threads: None,
         }
     }
 }

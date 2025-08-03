@@ -63,7 +63,7 @@ mod tests {
         let opts = MapOpts::default();
         let now = Instant::now();
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius,&[],prog.clone());
+        map_glcm(&opts.features(),&dims, &x, &mut features, &angles, n_bins, patch_radius,&[],None,prog.clone());
         let dur = now.elapsed();
 
         let o_dim = ArrayDim::from_shape(&[n,n,n,n_features]);
@@ -117,7 +117,7 @@ impl GLCMFeature {
 }
 
 /// core mapping routing
-pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]], progress:Arc<AtomicUsize>) {
+pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16], features:&mut [f64], angles:&[[i32;3]], n_bins:usize, kernel_radius:usize, restricted_coords:&[[i32;3]], max_threads:Option<usize>, progress:Arc<AtomicUsize>) {
 
     println!("dims = {:?}",dims);
     println!("image = {}",image.len());
@@ -139,6 +139,18 @@ pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16],
 
     // small positive number to avoid divisions by 0
     let eps = f64::EPSILON;
+
+    let mut builder = rayon::ThreadPoolBuilder::new();
+    let thread_pool = if let Some(max_threads) = max_threads {
+        builder.num_threads(max_threads).build().unwrap()
+    }else {
+        builder.build().unwrap()
+    };
+
+
+    thread_pool.install(|| {
+
+
 
     // main par-for loop for feature calculations. Each thread works on a single output feature vector (feature_set)
     features.par_chunks_exact_mut(n_features).enumerate().for_each(|(g_idx,feature_set)|{
@@ -522,6 +534,8 @@ pub fn map_glcm(to_calculate:&HashSet<GLCMFeature>, dims:&[usize], image:&[u16],
 
         });
 
+
+    });
 
     });
 
