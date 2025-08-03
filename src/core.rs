@@ -88,7 +88,7 @@ impl GLCMFeature {
 /// - The input image must already be quantized with `n_bins`.
 /// - Max multi-threading is enabling by default if `max_threads` is `None`
 #[allow(clippy::too_many_arguments)]
-pub fn map_glcm(
+pub fn map_glcm_features(
     to_calculate: &HashSet<GLCMFeature>,
     dims: &[usize],
     image: &[u16],

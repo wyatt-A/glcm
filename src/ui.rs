@@ -1,4 +1,4 @@
-use glcm::GLCMFeature;
+use core::GLCMFeature;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
@@ -80,7 +80,7 @@ impl Default for MapOpts {
     }
 }
 
-use crate::glcm;
+use crate::core;
 use strum::IntoEnumIterator;
 
 impl MapOpts {

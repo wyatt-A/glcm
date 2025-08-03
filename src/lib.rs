@@ -1,11 +1,11 @@
-use crate::glcm::map_glcm;
+use crate::core::map_glcm_features;
 use crate::ui::MapOpts;
 use array_lib::ArrayDim;
 use num_traits::{ToPrimitive, Zero};
 use rayon::prelude::*;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-pub mod glcm;
+pub mod core;
 mod subr;
 pub mod ui;
 
@@ -40,7 +40,7 @@ pub fn run_glcm_map(
 
     let mut out = vec![0f64; odims.numel()];
 
-    map_glcm(
+    map_glcm_features(
         &opts.features(),
         vol_dims,
         &bins,
@@ -219,7 +219,7 @@ pub fn change_dims<T: Sized + Copy + Send + Sync>(
 
 #[cfg(test)]
 mod tests {
-    use crate::glcm::map_glcm;
+    use crate::core::map_glcm_features;
     use crate::ui::MapOpts;
     use crate::{
         change_dims, discretize_by_bin_count, discretize_by_bin_width, generate_angles, n_angles,
@@ -245,7 +245,7 @@ mod tests {
         let mut out = vec![0f64; odims.numel()];
         let mut swapped = vec![0f64; odims.numel()];
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(
+        map_glcm_features(
             &opts.features(),
             vol_dims,
             &img,
@@ -307,7 +307,7 @@ mod tests {
         // pre-masked
         write_nifti("regression_test_img", &img, dims);
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(
+        map_glcm_features(
             &opts.features(),
             &vol_dims,
             &img,
@@ -365,7 +365,7 @@ mod tests {
 
         let opts = MapOpts::default();
         let prog = Arc::new(AtomicUsize::new(0));
-        map_glcm(
+        map_glcm_features(
             &opts.features(),
             &dims,
             &x,
