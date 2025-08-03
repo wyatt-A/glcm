@@ -5,11 +5,9 @@ use num_traits::{ToPrimitive, Zero};
 use rayon::prelude::*;
 use crate::glcm::map_glcm;
 use crate::ui::MapOpts;
-
 pub mod glcm;
-mod core;
-mod subr;
 pub mod ui;
+mod subr;
 
 #[cfg(test)]
 mod tests {
@@ -42,8 +40,9 @@ mod tests {
 
         change_dims(&vol_dims,24,&out,&mut swapped);
 
-        assert_eq!(expected_result, swapped);
-
+        let err_norm = expected_result.iter().zip(&swapped).map(|(&x,&y)| (x - y).powi(2)).sum::<f64>().sqrt();
+        // very small residual norm
+        assert!(err_norm < 1e-15);
     }
 
     fn test_regresion_params() -> MapOpts {

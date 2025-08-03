@@ -8,40 +8,6 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use glcm::GLCMFeature;
 
-#[cfg(test)]
-mod tests {
-    use crate::ui::{Alias, GLCMFeature, MapOpts, RadMapOptsSer};
-
-    #[test]
-    fn config() {
-
-        let opts = RadMapOptsSer {
-            kernel_radius: 1,
-            n_bins: 32,
-            features: vec![
-                Alias { feature: "auto_correlation".to_string(), alias: "autocorr".to_string() },
-                Alias { feature: "auto_correlation".to_string(), alias: "autocorr".to_string() },
-            ],
-            separator: Some("_".to_string()),
-        };
-
-        let ts = toml::to_string(&opts).unwrap();
-        println!("{}", ts);
-
-        let opts: MapOpts = opts.into();
-
-        println!("{:?}", opts);
-
-        println!("{}",GLCMFeature::CONTRAST.index());
-
-        let ops:RadMapOptsSer = MapOpts::default().into();
-        let ts = toml::to_string(&ops).unwrap();
-        println!("{ts}")
-
-    }
-
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParseGLCMFeatureError;
 

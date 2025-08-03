@@ -1,6 +1,5 @@
-use array_lib::ArrayDim;
 use ndarray::ShapeBuilder;
-use ndarray_linalg::{EigVals, EigValsh, UPLO};
+use ndarray_linalg::EigVals;
 use rayon::prelude::*;
 
 #[inline]
