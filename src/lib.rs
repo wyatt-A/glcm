@@ -211,7 +211,7 @@ mod tests {
 
 }
 
-pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:ArrayDim, progress:Arc<AtomicUsize>) -> (Vec<f64>, ArrayDim) {
+pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:ArrayDim, progress:Arc<AtomicUsize>) -> (Vec<f32>, ArrayDim) {
 
     let vol_dims = &dims.shape()[0..3];
 
@@ -236,7 +236,10 @@ pub fn run_glcm_map(opts: MapOpts, image:Vec<f64>, mask:Option<Vec<f64>>, dims:A
 
     map_glcm(&opts.features(),vol_dims,&bins,&mut out,&angles,opts.n_bins,opts.kernel_radius,&[],progress);
 
-    let mut features = odims.alloc(0f64);
+    // save some memory
+    let out:Vec<_> = out.into_par_iter().map(|x| x as f32).collect();
+
+    let mut features = odims.alloc(0f32);
     change_dims(vol_dims,24,&out,&mut features);
 
     let fdims =  ArrayDim::from_shape(&[vol_dims[0],vol_dims[1],vol_dims[2],24]);
@@ -354,7 +357,7 @@ pub fn generate_angles(angles: &mut [[i32; 3]], r: usize) {
 }
 
 /// swaps the feature dims to the last dimension
-pub fn change_dims(dims:&[usize],n_features:usize,x:&[f64],y:&mut [f64]) {
+pub fn change_dims<T:Sized + Copy + Send + Sync>(dims:&[usize],n_features:usize,x:&[T],y:&mut [T]) {
     let i_dims = ArrayDim::from_shape(&[n_features,dims[0],dims[1],dims[2]]);
     let o_dims = ArrayDim::from_shape(&[dims[0],dims[1],dims[2],n_features]);
     y.par_iter_mut().enumerate().for_each(|(i,y)|{
