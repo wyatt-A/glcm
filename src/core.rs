@@ -100,8 +100,6 @@ pub fn map_glcm_features(
     max_threads: Option<usize>,
     progress: Arc<AtomicUsize>,
 ) {
-    println!("dims = {dims:?}");
-    println!("image = {}", image.len());
 
     let n_features = 24;
 
