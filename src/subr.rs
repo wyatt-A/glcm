@@ -1,5 +1,7 @@
-use ndarray::ShapeBuilder;
-use ndarray_linalg::EigVals;
+//use ndarray::ShapeBuilder;
+//use ndarray_linalg::EigVals;
+use lax::Lapack;
+use lax::layout::MatrixLayout;
 
 #[inline]
 pub fn calc_sum_of_squares(glcm: &[f64], n_bins: usize, ux: f64) -> f64 {
@@ -104,15 +106,30 @@ pub fn calc_mcc(
     }
 
     //calculate the sqrt of the second-largest eigenvalue
-    let m = ndarray::ArrayView2::from_shape((n_bins, n_bins).f(), scratch_matrix).unwrap();
+
     // this method was found to be faster than eigvalsh, which assumes symmetric matrices
-    let mut e = m.eigvals().unwrap().to_vec();
-    if e.len() < 2 {
-        1.
-    } else {
-        e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
-        e[n_bins - 2].re.sqrt()
+
+    if let Ok((mut vals,..)) = Lapack::eig(false,MatrixLayout::C {row: n_bins as i32,lda: n_bins as i32},scratch_matrix) {
+        if vals.len() < 2 {
+            1.
+        } else {
+            vals.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
+            vals[n_bins - 2].re.sqrt()
+        }
+    }else {
+        let matrix_norm = scratch_matrix.iter().map(|&a| a*a).sum::<f64>().sqrt();
+        panic!("eigenvalue decomp failed: matrix norm: {matrix_norm}");
+        f64::NAN
     }
+
+    //let m = ndarray::ArrayView2::from_shape((n_bins, n_bins).f(), scratch_matrix).unwrap();
+    // let mut e = m.eigvals().unwrap().to_vec();
+    // if e.len() < 2 {
+    //     1.
+    // } else {
+    //     e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
+    //     e[n_bins - 2].re.sqrt()
+    // }
 }
 
 #[inline]
