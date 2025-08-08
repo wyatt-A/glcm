@@ -123,13 +123,27 @@ pub fn calc_mcc(
     // }
 
     let m = ndarray::ArrayView2::from_shape((n_bins, n_bins).f(), scratch_matrix).unwrap();
-    let mut e = m.eigvals().unwrap().to_vec();
-    if e.len() < 2 {
-        1.
-    } else {
-        e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
-        e[n_bins - 2].re.sqrt()
+
+    if let Ok(eig) = m.eigvals() {
+        let mut e = eig.to_vec();
+        if e.len() < 2 {
+            1.
+        } else {
+            e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
+            e[n_bins - 2].re.sqrt()
+        }
+    }else {
+        let matrix_norm = scratch_matrix.iter().map(|&x| x * x).sum::<f64>().sqrt();
+        panic!("failed to compute eigenvalues for matrix with norm: {matrix_norm}");
     }
+
+    // let mut e = m.eigvals().unwrap().to_vec();
+    // if e.len() < 2 {
+    //     1.
+    // } else {
+    //     e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
+    //     e[n_bins - 2].re.sqrt()
+    // }
 }
 
 #[inline]
