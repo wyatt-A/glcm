@@ -122,6 +122,9 @@ pub fn calc_mcc(
     //     f64::NAN
     // }
 
+    // let matrix_norm = scratch_matrix.iter().map(|&x| x * x).sum::<f64>().sqrt();
+    // return matrix_norm;
+
     let m = ndarray::ArrayView2::from_shape((n_bins, n_bins).f(), scratch_matrix).unwrap();
 
     if let Ok(eig) = m.eigvals() {
@@ -133,17 +136,11 @@ pub fn calc_mcc(
             e[n_bins - 2].re.sqrt()
         }
     }else {
-        let matrix_norm = scratch_matrix.iter().map(|&x| x * x).sum::<f64>().sqrt();
-        panic!("failed to compute eigenvalues for matrix with norm: {matrix_norm}");
+        //let matrix_norm = scratch_matrix.iter().map(|&x| x * x).sum::<f64>().sqrt();
+        println!("failed to compute eigenvalues for matrix {:?}",scratch_matrix);
+        f64::NAN
     }
 
-    // let mut e = m.eigvals().unwrap().to_vec();
-    // if e.len() < 2 {
-    //     1.
-    // } else {
-    //     e.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
-    //     e[n_bins - 2].re.sqrt()
-    // }
 }
 
 #[inline]
