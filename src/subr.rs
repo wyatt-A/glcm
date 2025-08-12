@@ -138,18 +138,6 @@ pub fn calc_mcc(
             e[n_bins - 2].re.sqrt()
         }
     }else {
-        //let matrix_norm = scratch_matrix.iter().map(|&x| x * x).sum::<f64>().sqrt();
-        //println!("failed to compute eigenvalues for matrix {:?}, returning NAN",scratch_matrix);
-
-        for entry in scratch_matrix {
-            if entry.is_subnormal() {
-                println!("found subnormal entry!")
-            }
-            if !entry.is_finite() {
-                println!("found non-finite entry!");
-            }
-        }
-
         f64::NAN
     }
 
