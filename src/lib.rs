@@ -15,7 +15,7 @@ pub fn run_glcm_map(
     mask: Option<Vec<f64>>,
     dims: ArrayDim,
     progress: Arc<AtomicUsize>,
-) -> (Vec<f32>, ArrayDim) {
+) -> (Vec<f32>, ArrayDim, Vec<usize>) {
     let vol_dims = &dims.shape()[0..3];
 
     let mut bins = vec![0; dims.numel()];
@@ -40,7 +40,7 @@ pub fn run_glcm_map(
 
     let mut out = vec![0f64; odims.numel()];
 
-    map_glcm_features(
+    let bad_voxels = map_glcm_features(
         &opts.features(),
         vol_dims,
         &bins,
@@ -65,7 +65,7 @@ pub fn run_glcm_map(
         let mut features = odims.alloc(0f32);
         change_dims(vol_dims, 24, &out, &mut features);
         let fdims = ArrayDim::from_shape(&[vol_dims[0], vol_dims[1], vol_dims[2], 24]);
-        (features, fdims)
+        (features, fdims, bad_voxels)
     })
 }
 

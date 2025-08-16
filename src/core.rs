@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use strum::{Display, EnumIter};
 
 // this allocates a dynamically sized array to store GLCM data (1 per thread)
@@ -73,6 +73,7 @@ impl GLCMFeature {
 /// * `kernel_radius` - Radius of the neighborhood window (in voxels) around each mapped voxel.
 /// * `restricted_coords` - Optional list of `[x, y, z]` coordinates to restrict computation to; if empty, all voxels are processed.
 /// * `max_threads` - Optional number of threads to use (defaults to all available if `None`).
+/// * `bad_voxels` - array of voxels that failed to compute a feature (this will often be MCC)
 /// * `progress` - Shared atomic counter updated during processing (for UI/progress bars).
 ///
 /// # Panics
@@ -99,9 +100,11 @@ pub fn map_glcm_features(
     restricted_coords: &[[i32; 3]],
     max_threads: Option<usize>,
     progress: Arc<AtomicUsize>,
-) {
+) -> Vec<usize> {
 
     let n_features = 24;
+
+    let bad_voxels = Arc::new(Mutex::new(vec![]));
 
     // number of angles to calculate a glcm. One glcm is calculated per angle
     let n_angles = angles.len();
@@ -459,15 +462,22 @@ pub fn map_glcm_features(
                     // 16: MAXIMUM CORRELATION COEFFICIENT (the expensive one)
                     if to_calculate.contains(&MAXIMUM_CORRELATION_COEFFICIENT) {
                         let mut scratch_mat = vec![0.; n_bins * n_bins];
-                        feature_set[MAXIMUM_CORRELATION_COEFFICIENT as usize] = glcm
+
+                        let mcc = glcm
                             .chunks_exact(n_bins * n_bins)
                             .zip(px.chunks_exact(n_bins).zip(py.chunks_exact(n_bins)))
                             .map(|(glcm, (px, py))| {
                                 calc_mcc(glcm, &mut scratch_mat, n_bins, px, py, eps)
-                                //0.
                             })
                             .sum::<f64>()
                             / n_angles as f64;
+                        if mcc.is_finite() {
+                            feature_set[MAXIMUM_CORRELATION_COEFFICIENT as usize] = mcc;
+                        }else {
+                            feature_set[MAXIMUM_CORRELATION_COEFFICIENT as usize] = 0.;
+                            let mut b = bad_voxels.lock().unwrap();
+                            b.push(g_idx);
+                        }
                     }
 
                     // 17: INVERSE DIFFERENCE MOMENT NORMALIZED
@@ -548,4 +558,5 @@ pub fn map_glcm_features(
                 });
             });
     });
+    bad_voxels.lock().unwrap().to_vec()
 }
